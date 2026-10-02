@@ -14,6 +14,15 @@ import type {} from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-api-session-controller/client'
 import type {} from '@deepseek-ai/dsh-agent-preset-registry/remote'
 import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
+import type {} from '@deepseek-ai/dsh-api-workspace-controller/remote'
+
+// Register this plugin's own Session reference source so `ctx.sessions.retain`
+// accepts a typed `'task-board'` label instead of an `as never` cast.
+declare module '@deepseek-ai/dsh-api-session-controller/client' {
+  interface SessionReferenceSourceMap {
+    'task-board': unknown
+  }
+}
 import { TaskBoardController, type TaskBoardRemote } from './controller.ts'
 import { TaskBoardLauncher } from './TaskBoardLauncher.tsx'
 import { TaskBoardOverlay } from './TaskBoardOverlay.tsx'
@@ -109,12 +118,14 @@ export async function apply(ctx: ClientContext): Promise<void> {
         }]
         : [])
     },
-    // NOTE (0.1.7-rc.2 port): ctx.workspaces.pickDirectory() no longer exists.
-    // Directory selection moved to the directory-picker UI plugins; this face
-    // now resolves a Workspace path from the create flow instead. Kept as a
-    // null-returning stub so the injected shape stays stable — the author's
-    // original picker wiring was removed with the old IWorkspaces contract.
-    pickDirectory: () => Promise.resolve(null),
+    // 0.1.7-rc.2 replaced ctx.workspaces.pickDirectory() with the generated
+    // remote.directoryPicker seam (pick/list/createDirectory). Wire the native
+    // chooser back through `pick`, mapping a transport failure or cancel to a
+    // null path so the create dialog treats it as "no directory chosen".
+    pickDirectory: async () => {
+      const result = await remote.directoryPicker.pick()
+      return result.ok ? result.value : null
+    },
     uploadAttachment: request => controller.uploadAttachment(request),
     create: request => controller.create(request),
     edit: (taskId, patch) => controller.edit(taskId, patch),
@@ -128,10 +139,14 @@ export async function apply(ctx: ClientContext): Promise<void> {
     reopen: taskId => controller.reopen(taskId),
     delete: taskId => controller.delete(taskId),
     loadRoundHistory: (round, signal) => loadRoundHistory(remote as unknown as TaskBoardHistoryApi, round, signal),
-    // NOTE (0.1.7-rc.2 port): ctx.sessions.open() no longer exists; the new
-    // lifecycle is retain(target, { source }) + reference.ready. We retain and
-    // let the caller surface drive the actual view open via the session list.
-    openSession: (sessionId) => { ctx.sessions.retain(sessionId, { source: 'task-board' as never }) },
+    // NOTE (0.1.7-rc.2 port): ctx.sessions.open() no longer exists. The new
+    // contract is retain(target, { source }) which allocates the exact Client
+    // generation; navigation belongs to view owners, so this face only retains
+    // (the shell/session list drives the visible open). Source is typed via the
+    // SessionReferenceSourceMap augmentation above.
+    openSession: (sessionId) => {
+      ctx.sessions.retain(sessionId, { source: 'task-board' })
+    },
   })
 
   ctx.slots.register({

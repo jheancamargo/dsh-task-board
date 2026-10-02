@@ -120,9 +120,12 @@ export async function loadRoundHistory(
   const sessionId: SessionId = round.sessionId
   const startSeq = round.startSeq ?? round.prompts[0]?.messageSeq
   const endSeq = round.endSeq
-  // New contract requires an inclusive `throughSeq` log cut; without a follow
-  // opening frame we default to the round's upper bound (or unbounded).
-  const throughSeq = endSeq ?? Number.MAX_SAFE_INTEGER
+  // `throughSeq` is the inclusive log cut from the follow opening frame; the
+  // wire sentinel `-1` means "read to the end of the log" (see
+  // dsh-api-session-controller's page validation). Use it when the round has
+  // no closing frame, never Number.MAX_SAFE_INTEGER (a real but absent seq
+  // is rejected as "session log does not contain through seq").
+  const throughSeq = endSeq ?? -1
   let beforeSeq: number | undefined
   let retained: SessionHistoryRecord[] = []
   let truncated = false

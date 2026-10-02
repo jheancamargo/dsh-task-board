@@ -17,6 +17,7 @@ class TracedRemote extends Service {
 
   agentPresets = { list: vi.fn() }
   session = { page: vi.fn() }
+  directoryPicker = { pick: vi.fn() }
 
   async $mount(): Promise<() => Promise<void>> {
     return async () => {}
@@ -92,8 +93,13 @@ async function bench() {
     ok: true as const,
     value: { records: [], hasMore: false },
   }))
+  const directoryPicker = vi.fn(async () => ({
+    ok: true as const,
+    value: null,
+  }))
   forwarded.agentPresets = { list: agentPresets }
   forwarded.session = { page: sessionPage }
+  forwarded.directoryPicker = { pick: directoryPicker }
   const slots = ctx.get('slots') as SlotRegistry
   slots.register({
     name: 'root',
@@ -113,6 +119,7 @@ async function bench() {
   return {
     agentPresets,
     ctx,
+    directoryPicker,
     fiber,
     forwarded,
     locale,
