@@ -2,8 +2,8 @@
 
 import { useEffect } from 'react'
 import {
-  IconCloseOutline16,
-  IconRefreshOutline16,
+  IconCloseOutlineMedium,
+  IconRefreshOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { CreateTaskDialog } from './CreateTaskDialog.tsx'
 import { taskBoardErrorMessage } from './controller.ts'
@@ -11,6 +11,7 @@ import { TaskBoardView } from './TaskBoardView.tsx'
 import { TaskDetail } from './TaskDetail.tsx'
 import { ExecutionLogDialog } from './ExecutionLogDialog.tsx'
 import type { TaskBoardOverlayProps } from './slots.ts'
+import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import css from './TaskBoardOverlay.module.css'
 
 /**
@@ -39,7 +40,6 @@ export function TaskBoardOverlay({
   delete: deleteTask,
   openSession,
   loadRoundHistory,
-  useWorkspaces,
   t,
 }: TaskBoardOverlayProps) {
   const open = useStore(state => state.open)
@@ -57,7 +57,11 @@ export function TaskBoardOverlay({
   const pendingTaskIds = useBoard(view => view.pendingTaskIds)
   const creating = useBoard(view => view.creating)
   const error = useBoard(view => view.error)
-  const workspaces = useWorkspaces(state => state.items)
+  // NOTE (0.1.7-rc.2 port): the old client runtime exposed `useWorkspaces` as a
+  // standard selector hook; the new workspace face (`ctx.workspaces.list`) does
+  // not project into slot props. Workspace filtering is stubbed empty alongside
+  // `pickDirectory` until the directory-picker integration is re-wired.
+  const workspaces: readonly WorkspaceView[] = []
   const selectedTask = selectedTaskId === null
     ? undefined
     : tasks.find(task => task.id === selectedTaskId)
@@ -103,10 +107,10 @@ export function TaskBoardOverlay({
         </div>
         <div className={css.actions}>
           <button type="button" className={css.iconButton} aria-label={t('board.refresh')} onClick={() => { void refresh() }}>
-            <IconRefreshOutline16 />
+            <IconRefreshOutlineMedium />
           </button>
           <button type="button" className={css.iconButton} aria-label={t('board.close')} onClick={() => { actions.close() }}>
-            <IconCloseOutline16 />
+            <IconCloseOutlineMedium />
           </button>
         </div>
       </header>

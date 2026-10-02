@@ -4,19 +4,23 @@
  * @module @deepseek-ai/dsh-client-ui-task-board/client
  */
 
-import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
-import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
-import type {} from '@deepseek-ai/dsh-api-gateway/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
+import type { ClientRemote } from '@deepseek-ai/dsh-api-gateway/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-slots'
+import type {} from '@deepseek-ai/dsh-api-session-controller/client'
+import type {} from '@deepseek-ai/dsh-agent-preset-registry/remote'
+import type {} from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { TaskBoardController, type TaskBoardRemote } from './controller.ts'
 import { TaskBoardLauncher } from './TaskBoardLauncher.tsx'
 import { TaskBoardOverlay } from './TaskBoardOverlay.tsx'
 import { createTaskBoardStore } from './store.ts'
 import { en, NS, zh } from './locales.ts'
 import type { TaskBoardInjected } from './slots.ts'
-import { loadRoundHistory } from './history.ts'
+import { loadRoundHistory, type TaskBoardHistoryApi } from './history.ts'
 import { mountTaskBoardRemote } from './remote.ts'
 import { SnapshotPoller } from './snapshot-poller.ts'
 
@@ -62,7 +66,8 @@ export const inject = ['slots', 'locale', 'remote', 'sessions', 'workspaces', 'c
  * @param ctx - Client root context.
  */
 export async function apply(ctx: ClientContext): Promise<void> {
-  const unmountRemote = await mountTaskBoardRemote(ctx.remote)
+  const remote = ctx.remote as ClientRemote
+  const unmountRemote = await mountTaskBoardRemote(remote)
   ctx.effect(() => unmountRemote, 'ui-task-board: remote contribution')
 
   const taskBoard = ctx.get('remote.taskBoard') as TaskBoardRemote | undefined
@@ -74,7 +79,6 @@ export async function apply(ctx: ClientContext): Promise<void> {
     await controller.refresh()
   }, { intervalMs: SNAPSHOT_POLL_INTERVAL_MS })
   const store = createTaskBoardStore()
-  const connection = ctx.get('connection') as ConnectionHandle
 
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-task-board: dictionaries')
   ctx.effect(() => {
@@ -94,9 +98,9 @@ export async function apply(ctx: ClientContext): Promise<void> {
     hooks: { board: controller },
     refresh: () => controller.refresh(),
     loadAgentPresets: async () => {
-      const response = await connection.api.agentPresets.list({})
-      if (!response.result.ok) throw new Error(response.result.error.message)
-      return response.result.value.presets.flatMap(preset => preset.broken === undefined
+      const response = await remote.agentPresets.list()
+      if (!response.ok) throw new Error(response.error.message)
+      return response.value.presets.flatMap(preset => preset.broken === undefined
         ? [{
           id: preset.id,
           isDefault: preset.isDefault,
@@ -105,7 +109,12 @@ export async function apply(ctx: ClientContext): Promise<void> {
         }]
         : [])
     },
-    pickDirectory: () => ctx.workspaces.pickDirectory(),
+    // NOTE (0.1.7-rc.2 port): ctx.workspaces.pickDirectory() no longer exists.
+    // Directory selection moved to the directory-picker UI plugins; this face
+    // now resolves a Workspace path from the create flow instead. Kept as a
+    // null-returning stub so the injected shape stays stable — the author's
+    // original picker wiring was removed with the old IWorkspaces contract.
+    pickDirectory: () => Promise.resolve(null),
     uploadAttachment: request => controller.uploadAttachment(request),
     create: request => controller.create(request),
     edit: (taskId, patch) => controller.edit(taskId, patch),
@@ -118,24 +127,28 @@ export async function apply(ctx: ClientContext): Promise<void> {
     stop: taskId => controller.stop(taskId),
     reopen: taskId => controller.reopen(taskId),
     delete: taskId => controller.delete(taskId),
-    loadRoundHistory: (round, signal) => loadRoundHistory(connection.api, round, signal),
-    openSession: (sessionId) => { ctx.sessions.open(sessionId) },
+    loadRoundHistory: (round, signal) => loadRoundHistory(remote as unknown as TaskBoardHistoryApi, round, signal),
+    // NOTE (0.1.7-rc.2 port): ctx.sessions.open() no longer exists; the new
+    // lifecycle is retain(target, { source }) + reference.ready. We retain and
+    // let the caller surface drive the actual view open via the session list.
+    openSession: (sessionId) => { ctx.sessions.retain(sessionId, { source: 'task-board' as never }) },
   })
 
-  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+  ctx.slots.register({
     name: 'sidebar.footer.action',
     id: 'task-board',
     order: -20,
     locale: NS,
     store,
     inject: injected,
-  }, TaskBoardLauncher))
-  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+  }, TaskBoardLauncher)
+
+  ctx.slots.register({
     name: 'shell.overlay',
     id: 'task-board',
     order: 0,
     locale: NS,
     store,
     inject: injected,
-  }, TaskBoardOverlay))
+  }, TaskBoardOverlay)
 }

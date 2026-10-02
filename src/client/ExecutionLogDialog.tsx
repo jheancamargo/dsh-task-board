@@ -4,13 +4,12 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import {
   Button,
-  DiffBlock,
   JsonTree,
   Modal,
-  TerminalBlock,
   writeClipboard,
+  type JsonTreeLabels,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { HistoryEntry } from '@deepseek-ai/dsh-client-connection/client'
+import type { SessionHistoryRecord } from '@deepseek-ai/dsh-api-session-controller/types'
 import type {
   TaskBoardRound,
   TaskBoardTask,
@@ -48,36 +47,41 @@ function rowMatches(row: TaskBoardHistoryRow, filter: LogFilter): boolean {
   const type = row.entry.event.type
   if (filter === 'agent') return type === 'assistant/message'
   if (filter === 'tools') return type === 'tool/call' || type === 'tool/result'
-  return type === 'turn/end' || (type === 'tool/result' && row.entry.event.data.error !== undefined)
+  return type === 'turn/end' || (type === 'tool/result' && (row.entry.event.data as { error?: unknown } | null)?.error !== undefined)
 }
 
-function contentText(entry: HistoryEntry): string | undefined {
+function contentText(entry: SessionHistoryRecord): string | undefined {
   const event = entry.event
+  const data = event.data as { content?: { type: string; text: string }[]; message?: { content: { type: string; text: string }[] } } | null
   const content = event.type === 'user/message'
-    ? event.data.content
+    ? data?.content
     : event.type === 'assistant/message'
-      ? event.data.message.content
+      ? data?.message?.content
       : undefined
   if (content === undefined) return undefined
   const text = content.flatMap(block => block.type === 'text' ? [block.text] : []).join('\n')
   return text === '' ? undefined : text
 }
 
-function renderIntent(entry: HistoryEntry): React.ReactNode {
-  const intent = entry.view
-  if (intent === undefined) return null
-  if (intent.for === 'call') {
-    const view = intent.view
-    if (view.card === 'terminal') return <TerminalBlock command={view.title} cwd={view.cwd} running />
-    if (view.card === 'diff') return <DiffBlock diffs={view.diffs} />
-    return null
-  }
-  const view = intent.view
-  if (view.card === 'terminal') {
-    return <TerminalBlock command={view.title ?? 'command'} output={view.output} exitCode={view.exitCode} signal={view.signal} />
-  }
-  if (view.card === 'diff') return <DiffBlock diffs={view.diffs} />
+function renderIntent(_entry: SessionHistoryRecord): React.ReactNode {
+  // TODO (0.1.7-rc.2 port): the old HistoryEntry carried a `view` render-intent
+  // field (terminal/diff cards). SessionHistoryRecord no longer exposes it; the
+  // render intent moved to a separate projection. Re-wire once its new source
+  // is identified.
   return null
+}
+
+const JSON_TREE_LABELS: JsonTreeLabels = {
+  copyValue: 'Copy value',
+  copyJson: 'Copy JSON',
+  copyPath: 'Copy path',
+  copyPrettyJson: 'Copy pretty JSON',
+  copyCompactJson: 'Copy compact JSON',
+  copied: 'Copied',
+  copyFailed: 'Copy failed',
+  collapseNode: 'Collapse node',
+  expandNode: 'Expand node',
+  copyButtonTitle: action => `Copy (${action})`,
 }
 
 function EventRow({ row, t }: { readonly row: TaskBoardHistoryRow; readonly t: TaskBoardOverlayProps['t'] }) {
@@ -105,7 +109,7 @@ function EventRow({ row, t }: { readonly row: TaskBoardHistoryRow; readonly t: T
       {text === undefined ? null : <p className={css.messageText}>{text}</p>}
       {intent}
       {text === undefined && intent === null
-        ? <JsonTree data={entry.event.data} label={`${entry.event.type} data`} />
+        ? <JsonTree data={(entry.event.data ?? {}) as object} label={`${entry.event.type} data`} labels={JSON_TREE_LABELS} />
         : null}
     </article>
   )

@@ -3,7 +3,7 @@
  * @module @deepseek-ai/dsh-client-ui-task-board/client/slots
  */
 
-import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import type {
   HostObservable,
