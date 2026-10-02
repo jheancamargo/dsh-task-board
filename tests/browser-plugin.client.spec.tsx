@@ -1,7 +1,8 @@
 import { Context, Service } from '@deepseek-ai/cordis'
 import { describe, expect, it, vi } from 'vitest'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { SlotRegistry, type IWorkspaces } from '@deepseek-ai/dsh-client-runtime/client'
+import { SlotRegistry } from '@deepseek-ai/dsh-client-runtime/client'
+import type { WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import type { TaskBoardSnapshotResult } from '../src/types.ts'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { TaskBoardLauncher } from '../src/client/TaskBoardLauncher.tsx'
@@ -81,7 +82,10 @@ async function bench() {
   })
   const sessions = { retain: vi.fn() }
   ctx.provide('sessions', sessions as never)
-  const workspaces = { pickDirectory: vi.fn<IWorkspaces['pickDirectory']>(async () => null) }
+  // 0.1.7-rc.2: ctx.workspaces.list is a bare observable source; the overlay
+  // projects its snapshot items. Provide an empty ready list for the harness.
+  const workspaceSnapshot = vi.fn(() => ({ items: [] as readonly WorkspaceView[], state: 'ready', phase: 'ready', error: null, archivedSessionIds: [], pinnedSessionIds: [] }))
+  const workspaces = { list: { getSnapshot: workspaceSnapshot, subscribe: () => () => {} } }
   ctx.provide('workspaces', workspaces as never)
   // Declared by `inject` for harness parity; the port no longer reads this seam.
   ctx.provide('connection', {} as never)

@@ -63,14 +63,6 @@ function contentText(entry: SessionHistoryRecord): string | undefined {
   return text === '' ? undefined : text
 }
 
-function renderIntent(_entry: SessionHistoryRecord): React.ReactNode {
-  // TODO (0.1.7-rc.2 port): the old HistoryEntry carried a `view` render-intent
-  // field (terminal/diff cards). SessionHistoryRecord no longer exposes it; the
-  // render intent moved to a separate projection. Re-wire once its new source
-  // is identified.
-  return null
-}
-
 const JSON_TREE_LABELS: JsonTreeLabels = {
   copyValue: 'Copy value',
   copyJson: 'Copy JSON',
@@ -98,7 +90,6 @@ function EventRow({ row, t }: { readonly row: TaskBoardHistoryRow; readonly t: T
 
   const entry = row.entry
   const text = contentText(entry)
-  const intent = renderIntent(entry)
   return (
     <article className={css.row} data-kind={entry.event.type}>
       <header>
@@ -107,8 +98,11 @@ function EventRow({ row, t }: { readonly row: TaskBoardHistoryRow; readonly t: T
         <time>{new Date(entry.event.time).toLocaleTimeString()}</time>
       </header>
       {text === undefined ? null : <p className={css.messageText}>{text}</p>}
-      {intent}
-      {text === undefined && intent === null
+      {/* 0.1.7-rc.2: the old `view` render-intent (terminal/diff cards) left the
+          wire model — SessionWireEvent is now a generic envelope, and bespoke
+          render intents are a separate UI projection. Fall back to the raw
+          JsonTree for events without extractable text. */}
+      {text === undefined
         ? <JsonTree data={(entry.event.data ?? {}) as object} label={`${entry.event.type} data`} labels={JSON_TREE_LABELS} />
         : null}
     </article>

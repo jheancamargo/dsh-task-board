@@ -1,6 +1,6 @@
 /** Full-frame task-board overlay shell. */
 
-import { useEffect } from 'react'
+import { useEffect, useSyncExternalStore } from 'react'
 import {
   IconCloseOutlineMedium,
   IconRefreshOutlineMedium,
@@ -25,6 +25,7 @@ export function TaskBoardOverlay({
   useBoard,
   refresh,
   loadAgentPresets,
+  workspaces,
   pickDirectory,
   uploadAttachment,
   create,
@@ -57,11 +58,13 @@ export function TaskBoardOverlay({
   const pendingTaskIds = useBoard(view => view.pendingTaskIds)
   const creating = useBoard(view => view.creating)
   const error = useBoard(view => view.error)
-  // NOTE (0.1.7-rc.2 port): the old client runtime exposed `useWorkspaces` as a
-  // standard selector hook; the new workspace face (`ctx.workspaces.list`) does
-  // not project into slot props. Workspace filtering is stubbed empty alongside
-  // `pickDirectory` until the directory-picker integration is re-wired.
-  const workspaces: readonly WorkspaceView[] = []
+  // 0.1.7-rc.2: project the Host-authoritative workspace rows reactively from
+  // the injected ctx.workspaces.list source (the old useWorkspaces selector
+  // hook is gone). useSyncExternalStore keeps the list live on follow frames.
+  const workspaceList: readonly WorkspaceView[] = useSyncExternalStore(
+    workspaces.subscribe,
+    () => workspaces.getSnapshot().items,
+  )
   const selectedTask = selectedTaskId === null
     ? undefined
     : tasks.find(task => task.id === selectedTaskId)
@@ -129,7 +132,7 @@ export function TaskBoardOverlay({
               <TaskBoardView
                 tasks={tasks}
                 pendingTaskIds={pendingTaskIds}
-                workspaces={workspaces}
+                workspaces={workspaceList}
                 query={query}
                 statusFilter={statusFilter}
                 locationFilter={locationFilter}
@@ -152,7 +155,7 @@ export function TaskBoardOverlay({
       <CreateTaskDialog
         open={createOpen}
         creating={creating}
-        workspaces={workspaces}
+        workspaces={workspaceList}
         t={t}
         loadAgentPresets={loadAgentPresets}
         pickDirectory={pickDirectory}
@@ -164,7 +167,7 @@ export function TaskBoardOverlay({
         task={selectedTask}
         pending={selectedTaskId !== null && pendingTaskIds.includes(selectedTaskId)}
         covered={selectedRound !== undefined}
-        workspaces={workspaces}
+        workspaces={workspaceList}
         t={t}
         onClose={() => { actions.selectTask(null) }}
         start={start}

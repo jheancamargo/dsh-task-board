@@ -118,6 +118,10 @@ export async function apply(ctx: ClientContext): Promise<void> {
         }]
         : [])
     },
+    // 0.1.7-rc.2: ctx.workspaces.list is a bare observable source; hand it to
+    // the surface so the overlay can project the Host-authoritative rows via
+    // useSyncExternalStore (replacing the old useWorkspaces selector hook).
+    workspaces: ctx.workspaces.list,
     // 0.1.7-rc.2 replaced ctx.workspaces.pickDirectory() with the generated
     // remote.directoryPicker seam (pick/list/createDirectory). Wire the native
     // chooser back through `pick`, mapping a transport failure or cancel to a
@@ -139,11 +143,9 @@ export async function apply(ctx: ClientContext): Promise<void> {
     reopen: taskId => controller.reopen(taskId),
     delete: taskId => controller.delete(taskId),
     loadRoundHistory: (round, signal) => loadRoundHistory(remote as unknown as TaskBoardHistoryApi, round, signal),
-    // NOTE (0.1.7-rc.2 port): ctx.sessions.open() no longer exists. The new
-    // contract is retain(target, { source }) which allocates the exact Client
-    // generation; navigation belongs to view owners, so this face only retains
-    // (the shell/session list drives the visible open). Source is typed via the
-    // SessionReferenceSourceMap augmentation above.
+    // `retain` allocates the exact Client generation; navigation belongs to
+    // view owners, so this face only retains (the shell/session list drives the
+    // visible open). The `'task-board'` source is typed via the augmentation.
     openSession: (sessionId) => {
       ctx.sessions.retain(sessionId, { source: 'task-board' })
     },
